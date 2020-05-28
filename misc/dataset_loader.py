@@ -183,7 +183,7 @@ def load_washington(fold=1, root="data/washington/", alphabet=default_alphabet):
             
         print "extracting DTP done" 
         
-        inds = np.squeeze(np.load(root + 'indeces.npy').item()['inds'])
+        inds = np.squeeze(np.load(root + 'indeces.npy', allow_pickle=True).item()['inds'])
         data = [data[i] for i in inds]
         
         #Train/val/test on different partitions based on which fold we're using
