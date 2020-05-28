@@ -22,4 +22,7 @@ RUN pip install easydict opencv-python
 WORKDIR /opt/ctrlfnet
 COPY . /opt/ctrlfnet
 
+RUN cd data/washington && wget http://ciir.cs.umass.edu/downloads/gw/gw_20p_wannot.tgz && \
+    tar -xzf gw_20p_wannot.tgz
+
 CMD ["/bin/bash"]
