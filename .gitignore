@@ -11,3 +11,7 @@
 /results_recall
 /results_recall_dtp
 /results_ghosh
+
+
+.DS_Store
+.vscode

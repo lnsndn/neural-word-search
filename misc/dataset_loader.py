@@ -5,6 +5,7 @@ Created on Fri Nov 25 12:10:04 2016
 
 @author: tomas
 """
+import csv
 import os
 import glob
 import copy
@@ -89,9 +90,9 @@ def extract_dtp(data, C_range, R_range, multiple_thresholds=True):
                     region_proposals = find_regions(img, threshold_range, C_range, R_range) 
                     region_proposals, _ = utils.unique_boxes(region_proposals)
                     np.savez_compressed(proposal_file, region_proposals=region_proposals)
-                except:
+                except Exception as e:
                     lock.acquire()
-                    print 'exception thrown with file', filename
+                    print(e)
                     lock.release()
 
             q.task_done()
@@ -747,3 +748,79 @@ def botany_konz_process(root, dataset, full):
         region['query_file'] = qf
 
     return data
+
+
+### SHIBR ###
+
+def process_and_store_shibr_image(input_path, output_path):
+    image = cv2.imread(input_path, cv2.IMREAD_GRAYSCALE)
+    cv2.imwrite(output_path, image)
+
+
+def load_shibr(root='data/shibr/', processed_data_output_root='processed_shibr/', alphabet=default_alphabet):
+    output_json = 'shibr.json'
+
+    if not os.path.exists(processed_data_output_root):
+        os.mkdir(processed_data_output_root)
+
+    if os.path.exists(output_json):
+        with open(output_json) as f:
+            return json.load(f) 
+
+    splits = ['test', 'train']
+    data = []
+    box_id = 0
+    for split in splits:
+        split_root = os.path.join(root, split)
+        index_file = os.path.join(split_root, 'index-%s.tsv.csv' % split)
+
+        with open(index_file) as f:
+            reader = csv.reader(f, delimiter=';')
+            for i, row in enumerate(reader):
+                datum = {}
+                gt_boxes = []
+                labels = [utils.replace_tokens(text.lower(), [t for t in text if t not in alphabet]) for text in row[:-2]]
+
+                for label in labels:
+                    gt_boxes.append((0, 0, 120, 50))
+
+                image_name = row[-1]
+                input_image_path = os.path.join(split_root, 'images', image_name)
+                output_image_path = os.path.join(processed_data_output_root, split + "_" + image_name.replace("/", "_"))
+                if not os.path.exists(output_image_path):
+                    process_and_store_shibr_image(input_image_path, output_image_path)
+                regions = []
+                for box, label in zip(gt_boxes, labels):
+                    regions.append({
+                        'id': box_id,
+                        'image': output_image_path,
+                        'height': box[3] - box[1],
+                        'width': box[2] - box[0],
+                        'label': label,
+                        'x': box[0],
+                        'y': box[1]
+                    })
+                    box_id += 1
+                
+                datum['id'] = output_image_path
+                datum['split'] = split
+                datum['gt_boxes'] = gt_boxes
+                datum['regions'] = regions
+                data.append(datum)
+                if i == 0:
+                    break
+
+        print("Extracting DTP for SHIBR")
+        C_range=range(1, 40, 3) #horizontal range
+        R_range=range(1, 40, 3) #vertical range
+        extract_dtp(data, C_range, R_range, multiple_thresholds=True)
+        for datum in data:        
+            proposals = np.load(datum['id'][:-4] + '_dtp.npz')['region_proposals']
+            datum['region_proposals'] = proposals.tolist()
+        print("Extracting DTP done")
+
+    with open(output_json, 'w+') as f:
+        json.dump(data, f)
+
+    return data
+
